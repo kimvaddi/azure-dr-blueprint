@@ -71,6 +71,7 @@ const expectedFiles = [
     'traffic-manager-failover.bicep',
     'paired-region-resources.bicep',
     'networking-dr.bicep',
+    'frontdoor-failover.bicep',
     'failover-runbook.ps1',
     'dr-test-scheduler.ps1',
     'dr-compliance-report.md',

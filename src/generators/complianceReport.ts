@@ -291,7 +291,8 @@ ${complianceMapping(complianceFrameworks)}
 | \`backup-vault-policy.bicep\` | Recovery Services vault with backup policies |
 | \`traffic-manager-failover.bicep\` | Traffic Manager profile with priority-based failover |
 | \`paired-region-resources.bicep\` | DR region resources (VNet, App Service, SQL, AKS) |
-| \`networking-dr.bicep\` | DR networking: VNets, NSGs, Firewalls, Gateways, Load Balancers |
+| \`networking-dr.bicep\` | DR networking: VNets, NSGs (auto-mirrored rules), Firewalls, Gateways, LBs |
+| \`frontdoor-failover.bicep\` | Azure Front Door failover with WAF + health probes |
 | \`failover-runbook.ps1\` | Executable PowerShell failover runbook |
 | \`dr-test-scheduler.ps1\` | Automated DR test with cleanup and reporting |
 | \`dr-compliance-report.md\` | This compliance documentation |

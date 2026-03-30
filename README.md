@@ -20,7 +20,8 @@ Every Azure workload needs a DR strategy, but configuring ASR replication, backu
 | `backup-vault-policy.bicep` | Recovery Services backup vault with workload-specific policies (VM daily, SQL full/diff/log) |
 | `traffic-manager-failover.bicep` | Traffic Manager profile with priority-based failover routing between primary and DR regions |
 | `paired-region-resources.bicep` | DR region infrastructure: App Service Plans, SQL failover groups, standby AKS clusters |
-| `networking-dr.bicep` | DR networking: VNets, NSGs, Route Tables, Load Balancers, Firewalls, App Gateways, Bastion, VPN/VWAN guidance |
+| `networking-dr.bicep` | DR networking: VNets, NSGs (with auto-mirrored rules), Route Tables, Load Balancers, Firewalls, App Gateways, Bastion, VPN/VWAN guidance |
+| `frontdoor-failover.bicep` | Azure Front Door with priority-based origin groups, health probes, WAF policy, and HTTPS redirect |
 | `failover-runbook.ps1` | Executable PowerShell script that performs the actual failover using Az modules |
 | `dr-test-scheduler.ps1` | Automated isolated test failover with health checks, cleanup, and Markdown report generation |
 | `dr-compliance-report.md` | Compliance-ready documentation mapped to SOC 2, ISO 27001, and HIPAA controls |
@@ -125,6 +126,7 @@ my-project/
 │   ├── traffic-manager-failover.bicep
 │   ├── paired-region-resources.bicep
 │   ├── networking-dr.bicep
+│   ├── frontdoor-failover.bicep
 │   ├── failover-runbook.ps1
 │   ├── dr-test-scheduler.ps1
 │   └── dr-compliance-report.md
@@ -225,7 +227,7 @@ Detected Workloads:
 
 ### Step 7: Click "Generate Blueprint"
 
-All 8 DR artifacts are created based on your **live infrastructure's current state** — your actual VMs, databases, web apps, networking, firewalls, regions, and SKUs.
+All 9 DR artifacts are created based on your **live infrastructure's current state** — your actual VMs, databases, web apps, networking, firewalls, regions, and SKUs.
 
 ```
 your-workspace/
@@ -238,6 +240,7 @@ your-workspace/
 │   ├── traffic-manager-failover.bicep
 │   ├── paired-region-resources.bicep
 │   ├── networking-dr.bicep
+│   ├── frontdoor-failover.bicep
 │   ├── failover-runbook.ps1
 │   ├── dr-test-scheduler.ps1
 │   └── dr-compliance-report.md
@@ -454,7 +457,7 @@ Documentation that auditors accept:
 Mirrors your complete network topology to the DR region:
 
 - **VNets & Subnets**: DR VNet with address space that doesn't overlap primary (for VPN/peering)
-- **NSGs**: Shell with TODO to copy your security rules (export with `az network nsg rule list`)
+- **NSGs**: Auto-mirrored security rules from your source templates (priority, direction, access, protocol, ports, address prefixes all extracted)
 - **Route Tables**: DR route table placeholder
 - **Load Balancers**: Standard SKU LB with health probes
 - **Application Gateways**: Dedicated subnet + public IP (backend config is app-specific)
@@ -463,6 +466,17 @@ Mirrors your complete network topology to the DR region:
 - **Bastion Hosts**: DR Bastion in AzureBastionSubnet for secure VM access
 - **VPN/ExpressRoute**: Guidance for deploying gateway in DR region, ExpressRoute Global Reach
 - **Virtual WAN**: Guidance for adding a DR hub (VWAN is global — just add a hub, don't duplicate)
+
+### Front Door Failover (`frontdoor-failover.bicep`)
+
+Global HTTP/HTTPS failover with WAF protection:
+
+- **Front Door Profile**: Standard or Premium SKU with 60-second origin timeout
+- **Origin Group**: Priority-based failover (primary=1, DR=2) with configurable health probes
+- **Origins**: Auto-generated based on detected workloads (App Service hostnames, Container App FQDNs, or generic backends)
+- **Routing**: Default route sending all `/*` traffic through the failover origin group with HTTPS redirect
+- **WAF Policy**: Azure-managed rule sets (DefaultRuleSet 2.1 + BotManagerRuleSet 1.0) in Detection mode
+- **Security Policy**: Links WAF to the Front Door endpoint
 
 ---
 
@@ -574,6 +588,32 @@ A: Import `dr-test-scheduler.ps1` as an Azure Automation Runbook with a recurrin
 
 **Q: Is my Azure credential stored anywhere?**
 A: No. The extension uses the existing Azure CLI session (`az login`). It does not store, cache, or transmit credentials. Authentication is handled entirely by the Azure CLI.
+
+---
+
+## Publishing to the VS Code Marketplace
+
+To make this extension available to the public:
+
+```bash
+# 1. Create a publisher account at https://marketplace.visualstudio.com/manage
+#    You need a Microsoft account and an Azure DevOps organization.
+
+# 2. Create a Personal Access Token (PAT) in Azure DevOps:
+#    - Go to https://dev.azure.com/<your-org>/_usersSettings/tokens
+#    - Create token with scope: Marketplace → Manage
+
+# 3. Login to vsce with your publisher:
+npx @vscode/vsce login <your-publisher-name>
+
+# 4. Publish:
+npx @vscode/vsce publish
+
+# Or publish a specific version:
+npx @vscode/vsce publish 1.0.0
+```
+
+Alternatively, upload the `.vsix` file manually at https://marketplace.visualstudio.com/manage.
 
 ---
 

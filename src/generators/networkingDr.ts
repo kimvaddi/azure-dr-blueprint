@@ -3,8 +3,92 @@
 // Application Gateways, Front Door, and VPN/ExpressRoute gateways to the
 // paired DR region.
 // ---------------------------------------------------------------------------
-import { AnalysisResult, GeneratedArtifact, ClassifiedWorkload } from '../models/types';
+import { AnalysisResult, GeneratedArtifact, ClassifiedWorkload, DetectedResource } from '../models/types';
 import { getRegionDisplayName } from '../utils/regionPairs';
+
+/**
+ * Extract NSG security rules from detected NSG resources.
+ * Works with both ARM JSON exports (where properties.securityRules is an array)
+ * and Bicep-parsed resources (where properties are flat key-value).
+ * Returns Bicep-formatted rule blocks.
+ */
+function extractNsgRules(nsgResources: DetectedResource[]): string {
+    const allRules: Array<{
+        name: string;
+        priority: number;
+        direction: string;
+        access: string;
+        protocol: string;
+        sourcePortRange: string;
+        destinationPortRange: string;
+        sourceAddressPrefix: string;
+        destinationAddressPrefix: string;
+        description?: string;
+    }> = [];
+
+    for (const nsg of nsgResources) {
+        const props = nsg.properties;
+        // ARM JSON export: securityRules is an array of objects
+        const rulesRaw = props.securityRules ?? props.SecurityRules;
+        if (Array.isArray(rulesRaw)) {
+            for (const rule of rulesRaw) {
+                if (typeof rule !== 'object' || rule === null) { continue; }
+                const r = rule as Record<string, unknown>;
+                // ARM format: rule has .name and .properties
+                const ruleProps = (typeof r.properties === 'object' && r.properties !== null)
+                    ? r.properties as Record<string, unknown>
+                    : r;
+                const name = String(r.name ?? ruleProps.name ?? 'rule');
+                const priority = Number(ruleProps.priority ?? 100);
+                const direction = String(ruleProps.direction ?? ruleProps.Direction ?? 'Inbound');
+                const access = String(ruleProps.access ?? ruleProps.Access ?? 'Allow');
+                const protocol = String(ruleProps.protocol ?? ruleProps.Protocol ?? '*');
+                const sourcePortRange = String(ruleProps.sourcePortRange ?? ruleProps.SourcePortRange ?? '*');
+                const destinationPortRange = String(ruleProps.destinationPortRange ?? ruleProps.DestinationPortRange ?? '*');
+                const sourceAddressPrefix = String(ruleProps.sourceAddressPrefix ?? ruleProps.SourceAddressPrefix ?? '*');
+                const destinationAddressPrefix = String(ruleProps.destinationAddressPrefix ?? ruleProps.DestinationAddressPrefix ?? '*');
+                const description = ruleProps.description ? String(ruleProps.description) : undefined;
+
+                allRules.push({
+                    name, priority, direction, access, protocol,
+                    sourcePortRange, destinationPortRange,
+                    sourceAddressPrefix, destinationAddressPrefix,
+                    description,
+                });
+            }
+        }
+    }
+
+    if (allRules.length === 0) {
+        return '      // No NSG rules detected in source templates — add your rules here';
+    }
+
+    // Deduplicate by name+priority+direction, keeping the first occurrence
+    const seen = new Set<string>();
+    const uniqueRules = allRules.filter(r => {
+        const key = `${r.name}-${r.priority}-${r.direction}`;
+        if (seen.has(key)) { return false; }
+        seen.add(key);
+        return true;
+    });
+
+    // Sort by priority
+    uniqueRules.sort((a, b) => a.priority - b.priority);
+
+    return uniqueRules.map(r => `      {
+        name: '${r.name}'
+        properties: {
+          priority: ${r.priority}
+          direction: '${r.direction}'
+          access: '${r.access}'
+          protocol: '${r.protocol}'
+          sourcePortRange: '${r.sourcePortRange}'
+          destinationPortRange: '${r.destinationPortRange}'
+          sourceAddressPrefix: '${r.sourceAddressPrefix}'
+          destinationAddressPrefix: '${r.destinationAddressPrefix}'${r.description ? `\n          description: '${r.description}'` : ''}
+        }
+      }`).join('\n');
+}
 
 function detectNetworkResources(workload: ClassifiedWorkload): {
     vnets: string[];
@@ -150,20 +234,27 @@ resource drVnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
 `;
     }
 
-    // NSG
+    // NSG — extract actual rules from detected NSG resources
     if (net.nsgs.length > 0 || net.vnets.length > 0) {
+        // Find NSG resources to extract their security rules
+        const nsgResources = netWorkload
+            ? netWorkload.resources.filter(r =>
+                r.resourceType.toLowerCase().includes('networksecuritygroups') &&
+                !r.resourceType.toLowerCase().includes('/'))  // skip child resources
+            : [];
+        const nsgRulesBicep = extractNsgRules(nsgResources);
+
         bicep += `
 // ---------------------------------------------------------------------------
-// DR Network Security Group (mirror of: ${net.nsgs.length > 0 ? net.nsgs.join(', ') : 'primary NSGs'})
-// IMPORTANT: Copy your primary NSG rules here to maintain security parity
+// DR Network Security Group (auto-mirrored from: ${net.nsgs.length > 0 ? net.nsgs.join(', ') : 'primary NSGs'})
+// Rules below are extracted from your source templates/exports
 // ---------------------------------------------------------------------------
 resource drNsg 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   name: '\${namePrefix}-nsg-\${drLocation}'
   location: drLocation
   properties: {
     securityRules: [
-      // TODO: Mirror your primary NSG rules here
-      // Export NSG rules with: az network nsg rule list --nsg-name <name> --resource-group <rg>
+${nsgRulesBicep}
     ]
   }
 }

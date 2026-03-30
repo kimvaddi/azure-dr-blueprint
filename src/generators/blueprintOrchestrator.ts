@@ -14,6 +14,7 @@ import { generateFailoverRunbook } from './failoverRunbook';
 import { generateTestScheduler } from './testScheduler';
 import { generateComplianceReport } from './complianceReport';
 import { generateNetworkingDr } from './networkingDr';
+import { generateFrontDoorDr } from './frontDoorDr';
 import {
     DetectedResource,
     AnalysisResult,
@@ -131,6 +132,10 @@ export function generateFullBlueprint(
     // Networking DR (VNets, NSGs, Firewalls, Gateways, etc.)
     const netDr = generateNetworkingDr(analysis);
     if (netDr) { artifacts.push(netDr); }
+
+    // Front Door DR (global failover with WAF for web workloads)
+    const fdDr = generateFrontDoorDr(analysis);
+    if (fdDr) { artifacts.push(fdDr); }
 
     // Failover Runbook
     if (analysis.workloads.length > 0) {
