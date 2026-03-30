@@ -8,3 +8,6 @@ tsconfig.json
 !out/**
 node_modules/**
 examples/**
+dr-blueprint-live-test/**
+.dr-blueprint-exports/**
+.git/**
