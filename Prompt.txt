@@ -1,0 +1,12 @@
+i want to build an VS Code Extentension and make this available for the greater public to make use of this. Lets build an extention using the following details.
+
+The gap: Every Azure workload needs a DR strategy, but configuring ASR replication, backup policies, failover runbooks, and testing schedules is tedious and error-prone. Teams write DR docs in Word that are never tested and drift from reality.
+What it does: Analyze your existing Bicep/ARM templates → auto-detect workload type (IaaS VMs, AKS, App Service, SQL) → generate a matched DR blueprint: ASR replication policies with RPO/RTO targets, Azure Backup vault + policy Bicep, Traffic Manager/Front Door failover routing, paired-region resource definitions, and an executable PowerShell failover runbook (not a Word doc). Includes a DR test scheduler that creates isolated test failovers on a cron. Generates a compliance-ready DR documentation report.
+
+DR compliance is required for SOC 2, ISO 27001, HIPAA. This automates what typically takes a dedicated engineer weeks and ensures DR configs don't drift from the actual infrastructure.
+
+Make sure include a detailed Readme and an example for the users of the extension on how to used it.  
+Make sure that you are not making things up.  test the solution, send to QA and make sure that the solution extension is accurate to what the readme said.  it should be providing solution not is scaffolding.
+
+
+DR compliance is required for SOC 2, ISO 27001, HIPAA. This automates what typically takes a dedicated engineer weeks and ensures DR configs don't drift from the actual infrastructure.

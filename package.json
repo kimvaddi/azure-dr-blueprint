@@ -1,0 +1,158 @@
+{
+  "name": "azure-dr-blueprint",
+  "displayName": "Azure DR Blueprint Generator",
+  "description": "Auto-generate complete Azure Disaster Recovery blueprints from Bicep/ARM files or directly from a live Azure subscription. Produces ASR policies, backup vaults, failover routing, runbooks, test schedules, and compliance reports.",
+  "version": "1.0.0",
+  "publisher": "azure-dr-tools",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Azure",
+    "Other"
+  ],
+  "keywords": [
+    "azure",
+    "disaster recovery",
+    "DR",
+    "ASR",
+    "bicep",
+    "ARM",
+    "backup",
+    "failover",
+    "compliance",
+    "SOC2",
+    "ISO27001",
+    "HIPAA"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/azure-dr-tools/azure-dr-blueprint"
+  },
+  "activationEvents": [
+    "workspaceContains:**/*.bicep",
+    "workspaceContains:**/*.json",
+    "onCommand:drBlueprint.generateFromAzure",
+    "onCommand:drBlueprint.analyzeInfrastructure"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "drBlueprint.analyzeInfrastructure",
+        "title": "DR Blueprint: Analyze Infrastructure",
+        "category": "DR Blueprint"
+      },
+      {
+        "command": "drBlueprint.generateBlueprint",
+        "title": "DR Blueprint: Generate Full DR Blueprint",
+        "category": "DR Blueprint"
+      },
+      {
+        "command": "drBlueprint.generateFromAzure",
+        "title": "DR Blueprint: Generate from Live Azure Subscription",
+        "category": "DR Blueprint"
+      },
+      {
+        "command": "drBlueprint.generateFailoverRunbook",
+        "title": "DR Blueprint: Generate Failover Runbook",
+        "category": "DR Blueprint"
+      },
+      {
+        "command": "drBlueprint.generateTestSchedule",
+        "title": "DR Blueprint: Generate DR Test Schedule",
+        "category": "DR Blueprint"
+      },
+      {
+        "command": "drBlueprint.generateComplianceReport",
+        "title": "DR Blueprint: Generate Compliance Report",
+        "category": "DR Blueprint"
+      },
+      {
+        "command": "drBlueprint.analyzeCurrentFile",
+        "title": "DR Blueprint: Analyze Current File",
+        "category": "DR Blueprint"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "drBlueprint.analyzeCurrentFile",
+          "when": "resourceExtname == .bicep || resourceExtname == .json",
+          "group": "drBlueprint"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "drBlueprint.analyzeCurrentFile",
+          "when": "resourceExtname == .bicep || resourceExtname == .json",
+          "group": "drBlueprint"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Azure DR Blueprint",
+      "properties": {
+        "drBlueprint.defaultRpoMinutes": {
+          "type": "number",
+          "default": 15,
+          "description": "Default Recovery Point Objective (RPO) in minutes."
+        },
+        "drBlueprint.defaultRtoMinutes": {
+          "type": "number",
+          "default": 60,
+          "description": "Default Recovery Time Objective (RTO) in minutes."
+        },
+        "drBlueprint.outputFolder": {
+          "type": "string",
+          "default": "dr-blueprint",
+          "description": "Output folder name for generated DR artifacts."
+        },
+        "drBlueprint.complianceFrameworks": {
+          "type": "array",
+          "default": [
+            "SOC2",
+            "ISO27001",
+            "HIPAA"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "SOC2",
+              "ISO27001",
+              "HIPAA"
+            ]
+          },
+          "description": "Compliance frameworks to include in the DR report."
+        },
+        "drBlueprint.backupRetentionDays": {
+          "type": "number",
+          "default": 30,
+          "description": "Default backup retention period in days."
+        },
+        "drBlueprint.testScheduleCron": {
+          "type": "string",
+          "default": "0 2 1 */3 *",
+          "description": "Cron expression for DR test schedule (default: quarterly at 2 AM on the 1st)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.56.0",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.3"
+  }
+}

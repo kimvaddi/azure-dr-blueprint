@@ -1,0 +1,319 @@
+// ---------------------------------------------------------------------------
+// Compliance Report generator – Markdown DR documentation for
+// SOC 2, ISO 27001, HIPAA
+// ---------------------------------------------------------------------------
+import { AnalysisResult, GeneratedArtifact, ClassifiedWorkload } from '../models/types';
+import { getRegionDisplayName } from '../utils/regionPairs';
+
+function workloadProtectionTable(workloads: ClassifiedWorkload[]): string {
+    let table = '| Workload Type | Resource Count | RPO Target | RTO Target | Protection Method |\n';
+    table += '|---------------|---------------|------------|------------|-------------------|\n';
+
+    const protectionMethods: Record<string, string> = {
+        'IaaS-VM': 'Azure Site Recovery (A2A replication)',
+        'AKS': 'AKS multi-region deployment + Velero backups',
+        'AppService': 'Multi-region deployment + Traffic Manager failover',
+        'SQL': 'SQL Auto-failover Groups + Geo-replication',
+        'Storage': 'GRS/RA-GRS replication',
+        'KeyVault': 'Soft-delete + purge protection (globally resilient)',
+        'CosmosDB': 'Multi-region writes / automatic failover',
+        'Networking': 'Mirrored VNet/NSG/Route Tables + VPN/ER redundancy',
+        'Firewall': 'DR Firewall with shared Firewall Policy',
+        'ContainerApps': 'Multi-region Container Apps + Traffic Manager',
+        'Functions': 'Multi-region deployment + geo-DR storage',
+        'Messaging': 'Geo-DR namespaces (Event Hubs/Service Bus)',
+        'Redis': 'Geo-replication (active or passive)',
+        'Monitoring': 'Multi-region Log Analytics + cross-workspace queries',
+    };
+
+    for (const w of workloads) {
+        table += `| ${w.type} | ${w.resources.length} | ${w.recommendedRpoMinutes} min | ${w.recommendedRtoMinutes} min | ${protectionMethods[w.type] || 'See documentation'} |\n`;
+    }
+    return table;
+}
+
+function resourceInventoryTable(workloads: ClassifiedWorkload[]): string {
+    let table = '| Resource Name | Resource Type | Source File | Workload |\n';
+    table += '|---------------|---------------|-------------|----------|\n';
+    for (const w of workloads) {
+        for (const r of w.resources) {
+            const shortFile = r.sourceFile.split(/[/\\]/).pop() || r.sourceFile;
+            table += `| ${r.name || r.symbolicName} | ${r.resourceType} | ${shortFile} | ${w.type} |\n`;
+        }
+    }
+    return table;
+}
+
+function complianceMapping(frameworks: string[]): string {
+    const mappings: Record<string, string> = {
+        'SOC2': `### SOC 2 Type II – Trust Services Criteria
+
+| Control | DR Blueprint Coverage |
+|---------|----------------------|
+| **CC7.4** – Incident response | Failover runbook with step-by-step procedures |
+| **CC7.5** – Recovery from incidents | Automated failover + rollback capability |
+| **CC9.1** – Risk mitigation | RPO/RTO targets defined per workload |
+| **A1.2** – Recovery infrastructure | Paired-region resources pre-provisioned |
+| **A1.3** – Recovery testing | Quarterly DR test schedule with reports |
+`,
+        'ISO27001': `### ISO 27001:2022 – Annex A Controls
+
+| Control | DR Blueprint Coverage |
+|---------|----------------------|
+| **A.5.29** – ICT readiness for business continuity | Full DR blueprint with paired-region resources |
+| **A.5.30** – ICT readiness for business continuity | DR test schedule validates readiness quarterly |
+| **A.8.13** – Information backup | Azure Backup policies with retention schedules |
+| **A.8.14** – Redundancy of information processing | Multi-region deployment with automatic failover |
+`,
+        'HIPAA': `### HIPAA – Security Rule (45 CFR Part 164)
+
+| Requirement | DR Blueprint Coverage |
+|-------------|----------------------|
+| **§164.308(a)(7)(i)** – Contingency Plan | Complete DR strategy with failover procedures |
+| **§164.308(a)(7)(ii)(A)** – Data Backup Plan | Azure Backup with defined retention policies |
+| **§164.308(a)(7)(ii)(B)** – DR Plan | Paired-region resources + failover runbook |
+| **§164.308(a)(7)(ii)(C)** – Emergency Mode Operation | PowerShell runbook for rapid failover |
+| **§164.308(a)(7)(ii)(D)** – Testing & Revision | Quarterly DR tests with automated reports |
+| **§164.310(d)(2)(iv)** – Data Backup & Storage | GRS backup vault with cross-region restore |
+`,
+    };
+
+    return frameworks.map(f => mappings[f] || `### ${f}\n\nMapping not available.\n`).join('\n');
+}
+
+export function generateComplianceReport(
+    analysis: AnalysisResult,
+    complianceFrameworks: string[],
+    cronExpression: string,
+    retentionDays: number,
+): GeneratedArtifact {
+    const primary = analysis.primaryRegion;
+    const secondary = analysis.pairedRegion;
+    const primaryDisplay = getRegionDisplayName(primary);
+    const secondaryDisplay = getRegionDisplayName(secondary);
+    const totalResources = analysis.workloads.reduce((sum, w) => sum + w.resources.length, 0);
+
+    const md = `# Disaster Recovery Compliance Report
+
+> **Generated by Azure DR Blueprint Generator**
+> Date: ${new Date().toISOString().slice(0, 10)}
+
+---
+
+## 1. Executive Summary
+
+This document describes the Disaster Recovery (DR) strategy for the Azure workload
+deployed in **${primaryDisplay}** with failover to **${secondaryDisplay}**.
+
+| Metric | Value |
+|--------|-------|
+| Primary Region | ${primaryDisplay} |
+| DR Region (Paired) | ${secondaryDisplay} |
+| Total Protected Resources | ${totalResources} |
+| Workload Types | ${analysis.workloads.map(w => w.type).join(', ')} |
+| Compliance Frameworks | ${complianceFrameworks.join(', ')} |
+| DR Test Schedule | Quarterly (cron: \`${cronExpression}\`) |
+| Backup Retention | ${retentionDays} days |
+| Analysis Date | ${analysis.analysedAt} |
+
+---
+
+## 2. Workload Protection Matrix
+
+${workloadProtectionTable(analysis.workloads)}
+
+---
+
+## 3. Protected Resource Inventory
+
+${resourceInventoryTable(analysis.workloads)}
+
+---
+
+## 4. DR Strategy by Workload
+
+${analysis.workloads.map(w => {
+    const strategies: Record<string, string> = {
+        'IaaS-VM': `### Virtual Machines (IaaS)
+- **Protection**: Azure Site Recovery (A2A) replicates VMs to ${secondaryDisplay}
+- **RPO**: ${w.recommendedRpoMinutes} minutes (crash-consistent snapshots)
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Failover**: Automated via ASR; committed after validation
+- **Networking**: Pre-provisioned VNet/NSG in DR region; NIC created during failover`,
+        'AKS': `### Azure Kubernetes Service
+- **Protection**: Standby AKS cluster in ${secondaryDisplay}
+- **RPO**: ${w.recommendedRpoMinutes} minutes (depends on data layer)
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Strategy**: Active-passive; DR cluster scaled up during failover
+- **Data**: Persistent volumes backed up via Velero or Azure Disk snapshots`,
+        'AppService': `### App Service / Web Apps
+- **Protection**: Duplicate App Service in ${secondaryDisplay} behind Traffic Manager
+- **RPO**: ${w.recommendedRpoMinutes} minutes
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Routing**: Traffic Manager with priority-based routing (automatic failover)
+- **Deployment**: Both regions receive the same deployment artifacts`,
+        'SQL': `### SQL Database
+- **Protection**: SQL Auto-failover Group with automatic failover
+- **RPO**: ${w.recommendedRpoMinutes} minutes (asynchronous geo-replication)
+- **RTO**: ${w.recommendedRtoMinutes} minutes (grace period: 60 min)
+- **Read**: Read-only endpoint available in DR region during normal operation
+- **Connection**: Application uses failover group listener endpoint`,
+        'Storage': `### Storage Accounts
+- **Protection**: Geo-Redundant Storage (GRS) or RA-GRS
+- **RPO**: ${w.recommendedRpoMinutes} minutes (asynchronous replication)
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Access**: Read-access available during outage with RA-GRS`,
+        'KeyVault': `### Key Vault
+- **Protection**: Soft-delete + purge protection enabled
+- **RPO**: ${w.recommendedRpoMinutes} minutes (replicated within Azure backbone)
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Note**: Azure Key Vault is automatically replicated within its geography`,
+        'CosmosDB': `### Cosmos DB
+- **Protection**: Multi-region automatic failover or multi-region writes
+- **RPO**: ${w.recommendedRpoMinutes} minutes
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Consistency**: Session consistency recommended for DR scenarios`,
+        'Networking': `### Networking (VNets, NSGs, Gateways)
+- **Protection**: Mirrored network topology in ${secondaryDisplay}
+- **RPO**: ${w.recommendedRpoMinutes} minutes (config-based, no data replication)
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Strategy**: Pre-deploy VNets, NSGs, Route Tables, and Load Balancers in DR region
+- **VPN/ER**: Secondary VPN tunnels or ExpressRoute Global Reach for on-prem connectivity
+- **VWAN**: Add a DR hub to existing Virtual WAN (global resource)`,
+        'Firewall': `### Azure Firewall
+- **Protection**: DR Firewall instance with shared Firewall Policy
+- **RPO**: ${w.recommendedRpoMinutes} minutes (policy is global)
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Strategy**: Azure Firewall Manager policies are global; DR firewall references the same policy
+- **Note**: Firewall rules stay in sync via shared policy — no rule drift`,
+        'ContainerApps': `### Container Apps / Container Instances
+- **Protection**: Multi-region Container Apps with Traffic Manager
+- **RPO**: ${w.recommendedRpoMinutes} minutes
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Registry**: Azure Container Registry with geo-replication for image availability
+- **Strategy**: Deploy identical Container Apps environment in DR region`,
+        'Functions': `### Azure Functions / Logic Apps
+- **Protection**: Multi-region deployment with geo-DR storage account
+- **RPO**: ${w.recommendedRpoMinutes} minutes
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Strategy**: Deploy Function App in DR region with identical code package
+- **Storage**: Function storage account should use GRS`,
+        'Messaging': `### Event Hubs / Service Bus
+- **Protection**: Geo-disaster recovery (namespace pairing)
+- **RPO**: ${w.recommendedRpoMinutes} minutes
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Strategy**: Enable Geo-DR on the namespace for automatic metadata failover
+- **Note**: Message data requires active geo-replication (Premium tier)`,
+        'Redis': `### Azure Cache for Redis
+- **Protection**: Geo-replication (active or passive)
+- **RPO**: ${w.recommendedRpoMinutes} minutes
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Strategy**: Configure geo-replication link from primary to DR region cache
+- **Tier**: Requires Premium or Enterprise tier for geo-replication`,
+        'Monitoring': `### Monitoring (Application Insights, Log Analytics)
+- **Protection**: Multi-region workspace with cross-workspace queries
+- **RPO**: ${w.recommendedRpoMinutes} minutes
+- **RTO**: ${w.recommendedRtoMinutes} minutes
+- **Strategy**: Deploy secondary Log Analytics workspace in DR region
+- **Alerts**: Action Groups are global; no DR needed for alert routing`,
+    };
+    return strategies[w.type] || `### ${w.type}\nSee generated Bicep files.`;
+}).join('\n\n')}
+
+---
+
+## 5. Backup Strategy
+
+| Parameter | Value |
+|-----------|-------|
+| Backup Vault Type | Recovery Services Vault |
+| Storage Redundancy | Geo-Redundant (GRS) |
+| Cross-Region Restore | Enabled |
+| Soft Delete | Enabled (14-day retention) |
+| Daily Retention | ${retentionDays} days |
+| Weekly Retention | 12 weeks |
+| Monthly Retention | 12 months |
+| Yearly Retention | 3 years |
+| Backup Time | 02:00 UTC daily |
+
+---
+
+## 6. Failover Procedure
+
+1. **Detection**: Azure Monitor alerts detect regional outage or degradation
+2. **Decision**: DR lead confirms failover (planned or unplanned)
+3. **Execution**: Run \`failover-runbook.ps1\` with appropriate parameters
+4. **Validation**: Verify application health in ${secondaryDisplay}
+5. **DNS**: Traffic Manager automatically routes traffic (TTL: 60s)
+6. **Communication**: Notify stakeholders per communication plan
+7. **Post-failover**: Monitor DR region performance; plan failback
+
+### Failback Procedure
+
+1. Confirm primary region is healthy
+2. Re-protect ASR items (reverse replication direction)
+3. Execute planned failover back to ${primaryDisplay}
+4. Verify and commit
+5. Resume normal operations
+
+---
+
+## 7. DR Testing Schedule
+
+| Parameter | Value |
+|-----------|-------|
+| Frequency | Quarterly |
+| Schedule (cron) | \`${cronExpression}\` |
+| Type | Isolated test failover (no production impact) |
+| Duration | ~2 hours (test + validation + cleanup) |
+| Automation | \`dr-test-scheduler.ps1\` |
+
+### Test Procedure
+1. Automated script creates isolated test failover in separate VNet
+2. Health checks validate test VMs/services are running
+3. Test report generated with pass/fail results
+4. All test resources cleaned up automatically
+5. Report archived for compliance evidence
+
+---
+
+## 8. Compliance Mapping
+
+${complianceMapping(complianceFrameworks)}
+
+---
+
+## 9. Generated Artifacts
+
+| File | Description |
+|------|-------------|
+| \`asr-replication-policy.bicep\` | ASR vault, replication policy, fabric, and container mappings |
+| \`backup-vault-policy.bicep\` | Recovery Services vault with backup policies |
+| \`traffic-manager-failover.bicep\` | Traffic Manager profile with priority-based failover |
+| \`paired-region-resources.bicep\` | DR region resources (VNet, App Service, SQL, AKS) |
+| \`networking-dr.bicep\` | DR networking: VNets, NSGs, Firewalls, Gateways, Load Balancers |
+| \`failover-runbook.ps1\` | Executable PowerShell failover runbook |
+| \`dr-test-scheduler.ps1\` | Automated DR test with cleanup and reporting |
+| \`dr-compliance-report.md\` | This compliance documentation |
+
+---
+
+## 10. Revision History
+
+| Date | Version | Author | Description |
+|------|---------|--------|-------------|
+| ${new Date().toISOString().slice(0, 10)} | 1.0 | Azure DR Blueprint Generator | Initial generation from infrastructure analysis |
+
+---
+
+*This report was auto-generated from live infrastructure analysis. Review and update
+whenever infrastructure changes are deployed. Re-run the DR Blueprint Generator to
+detect drift between this documentation and the actual infrastructure.*
+`;
+
+    return {
+        relativePath: 'dr-compliance-report.md',
+        content: md,
+        description: `Compliance DR report covering: ${complianceFrameworks.join(', ')}`,
+    };
+}
