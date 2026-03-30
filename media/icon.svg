@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0078D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#005A9E;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="shield" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#50E6FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0078D4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect x="4" y="4" width="120" height="120" rx="20" ry="20" fill="url(#bg)" />
+  <!-- Shield shape (DR protection) -->
+  <path d="M64 18 L96 32 L96 62 C96 82 82 98 64 106 C46 98 32 82 32 62 L32 32 Z" 
+        fill="url(#shield)" opacity="0.9" />
+  <!-- Inner shield highlight -->
+  <path d="M64 26 L90 38 L90 60 C90 77 78 91 64 98 C50 91 38 77 38 60 L38 38 Z" 
+        fill="#001B3A" opacity="0.6" />
+  <!-- Circular arrows (recovery/failover symbol) -->
+  <g transform="translate(64,62)" stroke="white" stroke-width="3" fill="none" stroke-linecap="round">
+    <!-- Top-right arc -->
+    <path d="M-2,-16 A16,16 0 0,1 14,0" />
+    <!-- Arrow head top-right -->
+    <polygon points="14,0 8,-6 10,2" fill="white" stroke="none" />
+    <!-- Bottom-left arc -->
+    <path d="M2,16 A16,16 0 0,1 -14,0" />
+    <!-- Arrow head bottom-left -->
+    <polygon points="-14,0 -8,6 -10,-2" fill="white" stroke="none" />
+  </g>
+  <!-- "DR" text -->
+  <text x="64" y="96" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-weight="bold" font-size="16" fill="white" letter-spacing="2">DR</text>
+</svg>
