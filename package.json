@@ -3,7 +3,7 @@
   "displayName": "Azure DR Blueprint Generator",
   "description": "Auto-generate complete Azure Disaster Recovery blueprints from Bicep/ARM files or directly from a live Azure subscription. Produces ASR policies, backup vaults, failover routing, runbooks, test schedules, and compliance reports.",
   "version": "1.0.0",
-  "publisher": "azure-dr-tools",
+  "publisher": "KimVaddi",
   "license": "MIT",
   "icon": "media/icon.png",
   "engines": {
